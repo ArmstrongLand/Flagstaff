@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Update Lots</title>
+<script>(function(){ if(!sessionStorage.getItem('auth')) window.location.href='../index.html'; })();</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --navy:#1B2A3B;--gold:#C8A96E;--gold-lt:#DEC28F;--cream:#F7F4EF;
+  --white:#fff;--gray:#8A9099;--gray-lt:#E8E5E0;--green:#2D5A3D;--green-lt:#EAF2ED;
+  --red:#8B2E2E;--red-lt:#F9ECEC;
+  --radius:12px;--shadow:0 4px 24px rgba(27,42,59,0.10);
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--cream);color:var(--navy);overscroll-behavior:none}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+#topbar{height:52px;background:var(--navy);display:flex;align-items:center;padding:0 12px;gap:10px;flex-shrink:0}
+#back-btn{color:var(--gold);font-size:20px;background:none;border:none;cursor:pointer;padding:4px 2px;line-height:1}
+#hood-select{flex:1;height:34px;background:rgba(255,255,255,0.08);border:1px solid rgba(200,169,110,0.3);border-radius:8px;color:#fff;font-size:13px;font-weight:500;padding:0 10px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23C8A96E' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+#hood-select option{background:var(--navy);color:#fff}
+#sold-count{background:rgba(255,255,255,0.10);border:1px solid rgba(200,169,110,0.25);border-radius:20px;color:var(--gold-lt);font-size:11px;font-weight:500;padding:4px 10px;white-space:nowrap;flex-shrink:0}
+
+#body{flex:1;overflow-y:auto;padding:12px 14px 40px}
+
+.section-label{font-size:10px;font-weight:600;color:var(--gray);letter-spacing:0.12em;text-transform:uppercase;margin:14px 0 8px 2px}
+
+.lot-row{background:var(--white);border-radius:10px;box-shadow:var(--shadow);display:flex;align-items:center;padding:12px 14px;gap:12px;margin-bottom:8px;transition:opacity 0.2s}
+.lot-row.sold{opacity:0.45}
+.lot-info{flex:1}
+.lot-num{font-size:14px;font-weight:600;color:var(--navy)}
+.lot-house{font-size:12px;color:var(--gray);margin-top:2px}
+.sold-badge{font-size:10px;font-weight:600;color:var(--red);background:var(--red-lt);padding:2px 8px;border-radius:20px;flex-shrink:0}
+
+.toggle-btn{height:30px;padding:0 12px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;flex-shrink:0;border:none}
+.toggle-btn.mark-sold{background:#FFF0EF;color:var(--red)}
+.toggle-btn.unmark-sold{background:var(--green-lt);color:var(--green)}
+
+.empty{text-align:center;padding:60px 20px;color:var(--gray)}
+.empty .icon{font-size:36px;margin-bottom:12px}
+.empty h2{font-size:16px;font-weight:600;margin-bottom:6px;color:var(--navy)}
+.empty p{font-size:13px;line-height:1.6}
+
+#more-btn{height:30px;width:34px;border:1px solid var(--bord,#e0ddd5);border-radius:7px;background:var(--surf,#fff);font-size:18px;cursor:pointer;color:var(--txt,#1a1a18);display:none;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+#more-menu{position:absolute;top:52px;right:8px;background:var(--surf,#fff);border:1px solid var(--bord,#e0ddd5);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:100;min-width:160px;overflow:hidden;display:none}
+#more-menu.open{display:block}
+.more-item{display:flex;align-items:center;padding:11px 14px;font-size:13px;cursor:pointer;color:var(--txt,#1a1a18);border-bottom:1px solid var(--bord,#e0ddd5);white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;width:100%;text-align:left;font-family:inherit}
+.more-item:last-child{border-bottom:none}
+.more-item:active{background:#f5f3ee}
+.more-item.danger{color:#c0392b}
+.more-item.pri{color:#3d6b45;font-weight:600}
+@media(max-width:600px){#more-btn{display:flex}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="back-btn">‹</button>
+  <div style="flex:1;font-size:14px;font-weight:600;color:#fff">Update Lots</div>
+  <div id="sold-count">0 sold</div>
+</div>
+
+<div id="body">
+  <div id="lot-list"></div>
+</div>
+
+<script>
+(function(){
+
+var SOLD_KEY = 'wk_sold';
+var hoods = [];
+var sold = {};
+
+function loadSold(){ try{ var r=localStorage.getItem(SOLD_KEY); sold=r?JSON.parse(r):{}; }catch(e){ sold={}; } }
+function saveSold(){ try{ localStorage.setItem(SOLD_KEY,JSON.stringify(sold)); }catch(e){} }
+function isSoldFor(hood,id){ return((sold[hood]||[]).indexOf(id)!==-1); }
+function toggleSoldFor(hood,id){
+  var list=sold[hood]||(sold[hood]=[]);
+  var idx=list.indexOf(id);
+  if(idx===-1) list.push(id); else list.splice(idx,1);
+  sold[hood]=list; saveSold();
+}
+
+function loadHoods(){
+  hoods=[];
+  for(var i=0;i<localStorage.length;i++){
+    var k=localStorage.key(i);
+    if(k&&k.startsWith('mbhood:')) hoods.push(k.replace('mbhood:',''));
+  }
+  if(!hoods.length){ renderEmpty(); return; }
+  render();
+}
+
+function renderEmpty(){
+  document.getElementById('lot-list').innerHTML=
+    '<div class="empty"><div class="icon">🏠</div><h2>No map published yet</h2>'+
+    '<p>Publish a neighborhood from the Map Builder to manage its lots here.</p></div>';
+  document.getElementById('sold-count').textContent='0 sold';
+}
+
+function sortByLotNum(lots){
+  return lots.slice().sort(function(a,b){
+    var na=parseInt(a.lot)||0, nb=parseInt(b.lot)||0;
+    return na-nb;
+  });
+}
+
+function render(){
+  var list=document.getElementById('lot-list');
+  list.innerHTML='';
+
+  if(!hoods.length){ renderEmpty(); return; }
+
+  var totalSold=0;
+
+  hoods.forEach(function(name){
+    var raw=localStorage.getItem('mbhood:'+name);
+    if(!raw)return;
+    var data; try{ data=JSON.parse(raw); }catch(e){ return; }
+    var lots=(data.E&&data.E.lots)||[];
+    if(!lots.length)return;
+
+    var sorted=sortByLotNum(lots);
+    var soldCount=sorted.filter(function(l){ return isSoldFor(name,l.id); }).length;
+    totalSold+=soldCount;
+
+    // Neighborhood header
+    var hdr=document.createElement('div');
+    hdr.className='section-label';
+    hdr.textContent=name+' · '+lots.length+' lots · '+soldCount+' sold';
+    list.appendChild(hdr);
+
+    // All lots sorted together, sold ones greyed out inline
+    sorted.forEach(function(l){ list.appendChild(makeRow(l,name)); });
+  });
+
+  document.getElementById('sold-count').textContent=totalSold+' sold';
+}
+
+function makeRow(l, name){
+  var sold_=isSoldFor(name,l.id);
+  var row=document.createElement('div');
+  row.className='lot-row'+(sold_?' sold':'');
+
+  var info=document.createElement('div');
+  info.className='lot-info';
+  info.innerHTML='<div class="lot-num">Lot '+(l.lot||l.id)+(sold_?' <span style="font-size:10px;font-weight:600;color:var(--red);background:var(--red-lt);padding:2px 7px;border-radius:20px;margin-left:4px">SOLD</span>':'')+'</div>'+
+    '<div class="lot-house">'+(l.house||'No house number yet')+'</div>';
+
+  var btn=document.createElement('button');
+  if(sold_){
+    btn.className='toggle-btn unmark-sold';
+    btn.textContent='Undo';
+    btn.title='Sale fell through? Tap to unmark.';
+  } else {
+    btn.className='toggle-btn mark-sold';
+    btn.textContent='Mark sold';
+  }
+
+  btn.addEventListener('click',function(){
+    toggleSoldFor(name,l.id);
+    render();
+  });
+
+  row.appendChild(info);
+  row.appendChild(btn);
+  return row;
+}
+
+document.getElementById('back-btn').addEventListener('click',function(){ window.location.href='../index.html'; });
+
+loadSold();
+loadHoods();
+
+})();
+</script>
+</body>
+</html>

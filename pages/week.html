@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Week View</title>
+<script>
+(function(){
+  if(!sessionStorage.getItem('auth')) window.location.href='../index.html';
+})();
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --navy:#1B2A3B;--navy-lt:#2C3E52;--gold:#C8A96E;--gold-lt:#DEC28F;
+  --cream:#F7F4EF;--white:#FFFFFF;--gray:#8A9099;--gray-lt:#E8E5E0;
+  --green:#2D5A3D;--green-lt:#EAF2ED;--red:#8B2E2E;
+  --radius:12px;--shadow:0 4px 24px rgba(27,42,59,0.10);
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--cream);color:var(--navy);overscroll-behavior:none}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* TOP BAR */
+#topbar{height:52px;background:var(--navy);display:flex;align-items:center;padding:0 12px;gap:10px;flex-shrink:0}
+#back-btn{color:var(--gold);font-size:20px;background:none;border:none;cursor:pointer;padding:4px 2px;line-height:1}
+#hood-select{flex:1;height:34px;background:rgba(255,255,255,0.08);border:1px solid rgba(200,169,110,0.3);border-radius:8px;color:var(--white);font-size:13px;font-weight:500;padding:0 10px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23C8A96E' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+#hood-select option{background:var(--navy);color:var(--white)}
+#progress-pill{background:rgba(255,255,255,0.10);border:1px solid rgba(200,169,110,0.25);border-radius:20px;color:var(--gold-lt);font-size:11px;font-weight:500;padding:4px 10px;white-space:nowrap;flex-shrink:0}
+#submit-btn{height:30px;padding:0 11px;border:none;border-radius:7px;background:var(--gold);color:var(--navy);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
+#submit-btn:active{background:var(--gold-lt)}
+#edit-map-btn{height:30px;padding:0 9px;border:1px solid rgba(200,169,110,0.4);border-radius:7px;background:rgba(200,169,110,0.12);font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;color:var(--gold-lt);flex-shrink:0}
+
+/* PROGRESS BAR */
+#prog-bar-wrap{height:4px;background:var(--gray-lt);flex-shrink:0}
+#prog-bar-fill{height:100%;background:var(--green);transition:width 0.3s;width:0%}
+
+/* MAP AREA */
+#map-wrap{flex:1;overflow:hidden;position:relative;touch-action:none;background:var(--cream)}
+#map-svg{width:100%;height:100%;display:block}
+
+/* LOT STATES */
+.lot-base{cursor:pointer;transition:opacity 0.15s}
+.lot-base:active{opacity:0.7}
+
+/* EMPTY / LOADING */
+#empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px;text-align:center}
+#empty-state .empty-icon{font-size:40px}
+#empty-state h2{font-size:17px;font-weight:600;color:var(--navy)}
+#empty-state p{font-size:13px;color:var(--gray);line-height:1.6}
+#empty-state a{color:var(--gold);font-size:13px;font-weight:500}
+
+/* TOAST */
+#toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(27,42,59,0.88);color:#fff;font-size:12px;padding:7px 16px;border-radius:20px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:30}
+#toast.show{opacity:1}
+
+/* LOT DETAIL SHEET */
+#sheet{position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(27,42,59,0.14);padding:20px 20px 32px;transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);z-index:20}
+#sheet.open{transform:translateY(0)}
+#sheet-handle{width:36px;height:4px;background:var(--gray-lt);border-radius:4px;margin:0 auto 16px}
+#sheet-lot{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:2px}
+#sheet-house{font-size:13px;color:var(--gray);margin-bottom:18px}
+#sheet-toggle{width:100%;height:46px;border-radius:10px;border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px}
+#sheet-toggle.mark{background:var(--green);color:#fff}
+#sheet-toggle.unmark{background:var(--gray-lt);color:var(--navy)}
+#sheet-close{width:100%;height:38px;border-radius:10px;border:1px solid var(--gray-lt);background:transparent;font-size:13px;color:var(--gray);cursor:pointer}
+
+#more-btn{height:30px;width:34px;border:1px solid var(--bord,#e0ddd5);border-radius:7px;background:var(--surf,#fff);font-size:18px;cursor:pointer;color:var(--txt,#1a1a18);display:none;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+#more-menu{position:absolute;top:52px;right:8px;background:var(--surf,#fff);border:1px solid var(--bord,#e0ddd5);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:100;min-width:160px;overflow:hidden;display:none}
+#more-menu.open{display:block}
+.more-item{display:flex;align-items:center;padding:11px 14px;font-size:13px;cursor:pointer;color:var(--txt,#1a1a18);border-bottom:1px solid var(--bord,#e0ddd5);white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;width:100%;text-align:left;font-family:inherit}
+.more-item:last-child{border-bottom:none}
+.more-item:active{background:#f5f3ee}
+.more-item.danger{color:#c0392b}
+.more-item.pri{color:#3d6b45;font-weight:600}
+@media(max-width:600px){#more-btn{display:flex}}
+@media(max-width:600px){#edit-map-btn,#submit-btn{display:none!important}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="back-btn">‹</button>
+  <select id="hood-select"><option value="">Loading…</option></select>
+  <div id="progress-pill">0 / 0</div>
+  <button id="edit-map-btn" style="display:none">✏️ Edit</button>
+  <button class="tsm pri" id="submit-btn">Submit</button>
+  <button id="more-btn">⋯</button>
+</div>
+<div id="more-menu">
+  <button class="more-item" id="mm-edit" style="display:none">✏️ Edit map</button>
+  <button class="more-item pri" id="mm-submit">Submit week</button>
+</div>
+<div id="prog-bar-wrap"><div id="prog-bar-fill"></div></div>
+
+<div id="map-wrap">
+  <svg id="map-svg" xmlns="http://www.w3.org/2000/svg">
+    <g id="g-roads"></g>
+    <g id="g-lots"></g>
+    <g id="g-labels"></g>
+  </svg>
+  <div id="empty-state" style="display:none">
+    <div class="empty-icon">🗺️</div>
+    <h2>No map published yet</h2>
+    <p>Open the Map Builder in Developer Tools, draw your neighborhood, and tap Publish to make it available here.</p>
+    <a href="../index.html">← Back to home</a>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<div id="sheet">
+  <div id="sheet-handle"></div>
+  <div id="sheet-lot">Lot —</div>
+  <div id="sheet-house"></div>
+  <button id="sheet-toggle" class="mark">Mark as done</button>
+  <button id="sheet-close">Close</button>
+</div>
+
+<!-- Submit confirm modal -->
+<div id="submit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:50;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:16px;padding:22px;width:100%;max-width:320px">
+    <h2 style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:8px">Submit this week?</h2>
+    <p id="submit-summary" style="font-size:13px;color:var(--gray);margin-bottom:18px;line-height:1.6"></p>
+    <div style="display:flex;gap:10px">
+      <button id="submit-cancel" style="flex:1;height:42px;border-radius:10px;border:1px solid var(--gray-lt);background:transparent;font-size:14px;cursor:pointer">Cancel</button>
+      <button id="submit-confirm" style="flex:1;height:42px;border-radius:10px;border:none;background:var(--gold);color:var(--navy);font-size:14px;font-weight:600;cursor:pointer">Submit week</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+// ── STATE ──
+var hoods = [];       // published neighborhood names
+var hoodData = null;  // current neighborhood element data
+var hoodName = '';
+var done = {};        // { hoodName: [id, id, ...] }
+var activeLotId = null;
+
+// viewport
+var vx=0, vy=0, vs=1;
+var pdown=false, panStart=null, panOrig=null, didPan=false;
+var tMoved=false, tPanStart=null, tPanOrig=null, tDist=null;
+var wasDragging=false;
+
+var SVG = document.getElementById('map-svg');
+
+// ── STORAGE ──
+var DONE_KEY = 'wk_done';
+var SOLD_KEY = 'wk_sold';
+function loadDone(){ try{ var r=localStorage.getItem(DONE_KEY); done=r?JSON.parse(r):{}; }catch(e){ done={}; } }
+function saveDone(){ try{ localStorage.setItem(DONE_KEY,JSON.stringify(done)); }catch(e){} }
+function doneList(){ return done[hoodName]||(done[hoodName]=[]); }
+function isDone(id){ return doneList().indexOf(id)!==-1; }
+function toggleDone(id){
+  var list=doneList(), idx=list.indexOf(id);
+  if(idx===-1) list.push(id); else list.splice(idx,1);
+  done[hoodName]=list; saveDone();
+}
+function isSold(id){ try{ var s=JSON.parse(localStorage.getItem(SOLD_KEY)||'{}'); return((s[hoodName]||[]).indexOf(id)!==-1); }catch(e){return false;} }
+
+// ── LOAD NEIGHBORHOODS ──
+function loadHoods(){
+  hoods=[];
+  for(var i=0;i<localStorage.length;i++){
+    var k=localStorage.key(i);
+    if(k&&k.startsWith('mbhood:')) hoods.push(k.replace('mbhood:',''));
+  }
+  var sel=document.getElementById('hood-select');
+  sel.innerHTML='';
+  if(!hoods.length){
+    sel.innerHTML='<option value="">No maps published</option>';
+    showEmpty(); return;
+  }
+  hoods.forEach(function(n){
+    var o=document.createElement('option');
+    o.value=n; o.textContent=n; sel.appendChild(o);
+  });
+  switchHood(hoods[0]);
+}
+
+function switchHood(name){
+  hoodName=name;
+  try{
+    var raw=localStorage.getItem('mbhood:'+name);
+    if(!raw){ showEmpty(); return; }
+    hoodData=JSON.parse(raw);
+    document.getElementById('empty-state').style.display='none';
+    recenter(); renderMap(); updateProgress();
+  }catch(e){ showEmpty(); }
+}
+
+function showEmpty(){
+  hoodData=null;
+  document.getElementById('empty-state').style.display='flex';
+  document.getElementById('g-roads').innerHTML='';
+  document.getElementById('g-lots').innerHTML='';
+  document.getElementById('g-labels').innerHTML='';
+  updateProgress();
+}
+
+// ── VIEWPORT ──
+function W(cx,cy){ var r=SVG.getBoundingClientRect(); return{x:(cx-r.left-vx)/vs,y:(cy-r.top-vy)/vs}; }
+function applyVP(){
+  var t='translate('+vx+','+vy+') scale('+vs+')';
+  ['g-roads','g-lots','g-labels'].forEach(function(id){ document.getElementById(id).setAttribute('transform',t); });
+}
+function clampVP(){
+  vs=Math.max(0.1,Math.min(8,vs));
+  applyVP();
+}
+function recenter(){
+  if(!hoodData)return;
+  var r=SVG.getBoundingClientRect(), sw=r.width, sh=r.height;
+  var E=hoodData.E||{};
+  var pts=[];
+  (E.roads||[]).forEach(function(rd){
+    if(rd.pts)rd.pts.forEach(function(p){pts.push(p);});
+    if(rd.cds)pts.push({x:rd.cx-rd.r,y:rd.cy-rd.r},{x:rd.cx+rd.r,y:rd.cy+rd.r});
+  });
+  (E.lots||[]).forEach(function(l){if(l.pts)l.pts.forEach(function(p){pts.push(p);});});
+  if(pts.length){
+    var minX=pts[0].x,maxX=pts[0].x,minY=pts[0].y,maxY=pts[0].y;
+    pts.forEach(function(p){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
+    var pad=24, cw=maxX-minX+pad*2, ch=maxY-minY+pad*2;
+    vs=Math.min(sw/cw,sh/ch);
+    vx=(sw-cw*vs)/2-(minX-pad)*vs;
+    vy=(sh-ch*vs)/2-(minY-pad)*vs;
+  } else {
+    vs=1; vx=20; vy=20;
+  }
+  applyVP();
+}
+
+// ── RENDER ──
+function mk(tag,a,p){
+  var el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.keys(a).forEach(function(k){el.setAttribute(k,String(a[k]));});
+  if(p)p.appendChild(el); return el;
+}
+function roadPoly(pts,hw){
+  if(pts.length<2)return'';
+  var L=[],R=[];
+  for(var i=0;i<pts.length;i++){
+    var dx,dy;
+    if(i<pts.length-1){dx=pts[i+1].x-pts[i].x;dy=pts[i+1].y-pts[i].y;}
+    else{dx=pts[i].x-pts[i-1].x;dy=pts[i].y-pts[i-1].y;}
+    var len=Math.sqrt(dx*dx+dy*dy)||1,nx=-dy/len*hw,ny=dx/len*hw;
+    L.push({x:pts[i].x+nx,y:pts[i].y+ny});
+    R.push({x:pts[i].x-nx,y:pts[i].y-ny});
+  }
+  var d='M'+L[0].x+','+L[0].y;
+  for(var i=1;i<L.length;i++)d+=' L'+L[i].x+','+L[i].y;
+  for(var i=R.length-1;i>=0;i--)d+=' L'+R[i].x+','+R[i].y;
+  return d+' Z';
+}
+function smPath(pts){
+  if(pts.length<2)return'';
+  if(pts.length===2)return'M'+pts[0].x+','+pts[0].y+' L'+pts[1].x+','+pts[1].y;
+  var d='M'+pts[0].x+','+pts[0].y;
+  for(var i=0;i<pts.length-1;i++){
+    var p=pts[i],q=pts[i+1],mx=(p.x+q.x)/2,my=(p.y+q.y)/2;
+    if(i===0)d+=' L'+mx+','+my;
+    else if(i===pts.length-2)d+=' Q'+p.x+','+p.y+' '+q.x+','+q.y;
+    else d+=' Q'+p.x+','+p.y+' '+mx+','+my;
+  }
+  return d;
+}
+function polyPath(pts){
+  if(!pts||!pts.length)return'';
+  var d='M'+pts[0].x+','+pts[0].y;
+  for(var i=1;i<pts.length;i++)d+=' L'+pts[i].x+','+pts[i].y;
+  return d+' Z';
+}
+
+function renderMap(){
+  if(!hoodData)return;
+  var E=hoodData.E||{roads:[],lots:[],labels:[]};
+  var gr=document.getElementById('g-roads');
+  var gl=document.getElementById('g-lots');
+  var glab=document.getElementById('g-labels');
+  gr.innerHTML=''; gl.innerHTML=''; glab.innerHTML='';
+
+  // Roads
+  (E.roads||[]).forEach(function(r){
+    if(r.cds){
+      mk('circle',{cx:r.cx,cy:r.cy,r:r.r,fill:'#c8c4b8',stroke:'#9e9a90','stroke-width':'1'},gr);
+    } else if(r.pts){
+      mk('path',{d:roadPoly(r.pts,r.w/2),fill:'#c8c4b8',stroke:'#9e9a90','stroke-width':'0.5'},gr);
+      if(r.name){
+        var tid='rl'+r.id;
+        mk('path',{d:smPath(r.pts),id:tid,fill:'none',stroke:'none'},gr);
+        var t=mk('text',{'font-size':'7',fill:'#888','text-anchor':'middle'},gr);
+        mk('textPath',{href:'#'+tid,startOffset:'50%'},t).textContent=r.name;
+      }
+    }
+  });
+
+  // Lots
+  (E.lots||[]).forEach(function(l){
+    if(!l.pts||!l.pts.length)return;
+    var done_=isDone(l.id);
+    var sold_=isSold(l.id);
+    var grp=mk('g',{},gl);
+
+    var fill = sold_ ? 'rgba(138,144,153,0.18)' : done_ ? 'rgba(45,90,61,0.55)' : 'rgba(61,107,69,0.10)';
+    var stroke = sold_ ? '#c0c4ca' : done_ ? '#2D5A3D' : '#3d6b45';
+    var sw = (done_&&!sold_) ? '2' : '1';
+    mk('path',{d:polyPath(l.pts),fill:fill,stroke:stroke,'stroke-width':sw},grp);
+
+    var cx=l.pts.reduce(function(s,p){return s+p.x;},0)/l.pts.length;
+    var cy=l.pts.reduce(function(s,p){return s+p.y;},0)/l.pts.length;
+
+    if(sold_){
+      mk('text',{x:cx,y:cy+3,'font-size':'7',fill:'#aaa','text-anchor':'middle'},grp).textContent='SOLD';
+    } else if(done_){
+      mk('text',{x:cx,y:cy+4,'font-size':'10',fill:'#fff','text-anchor':'middle'},grp).textContent='✓';
+    } else {
+      if(l.lot) mk('text',{x:cx,y:cy+(l.house?-1:3),'font-size':'8',fill:'#3d6b45','text-anchor':'middle','font-weight':'600'},grp).textContent=l.lot;
+      if(l.house) mk('text',{x:cx,y:cy+8,'font-size':'6.5',fill:'#7a7870','text-anchor':'middle'},grp).textContent=l.house;
+    }
+
+    // tap target — skip if sold
+    if(!sold_){
+      var hit=mk('path',{d:polyPath(l.pts),fill:'transparent',stroke:'none',cursor:'pointer'},grp);
+      (function(lotId,lotLabel){
+        hit.addEventListener('pointerdown',function(e){e.stopPropagation();});
+        hit.addEventListener('pointerup',function(e){
+          e.stopPropagation();
+          toggleDone(lotId);
+          var nowDone=isDone(lotId);
+          renderMap(); updateProgress();
+          showToast((nowDone?'✓ Lot '+lotLabel+' done':'Lot '+lotLabel+' unmarked'));
+        });
+        hit.addEventListener('touchend',function(e){
+          e.preventDefault(); e.stopPropagation();
+          toggleDone(lotId);
+          var nowDone=isDone(lotId);
+          renderMap(); updateProgress();
+          showToast((nowDone?'✓ Lot '+lotLabel+' done':'Lot '+lotLabel+' unmarked'));
+        });
+      })(l.id, l.lot||l.id);
+    }
+  });
+
+  // Labels
+  (E.labels||[]).forEach(function(lb){
+    mk('text',{x:lb.x,y:lb.y,'font-size':'9',fill:'#1a1a18','font-weight':'600'},glab).textContent=lb.text;
+  });
+}
+
+// ── PROGRESS ──
+function updateProgress(){
+  var E=hoodData?(hoodData.E||{}):{};
+  var lots=(E.lots||[]).filter(function(l){ return !isSold(l.id); });
+  var total=lots.length;
+  var doneCount=total?lots.filter(function(l){return isDone(l.id);}).length:0;
+  document.getElementById('progress-pill').textContent=doneCount+' / '+total;
+  var pct=total?Math.round(doneCount/total*100):0;
+  document.getElementById('prog-bar-fill').style.width=pct+'%';
+}
+
+// ── SHEET ──
+function openSheet(id){
+  activeLotId=id;
+  var E=hoodData?(hoodData.E||{}):{};
+  var lot=(E.lots||[]).find(function(l){return l.id===id;});
+  document.getElementById('sheet-lot').textContent=lot&&lot.lot?'Lot '+lot.lot:'Lot';
+  document.getElementById('sheet-house').textContent=lot&&lot.house?lot.house:'';
+  refreshSheetBtn();
+  document.getElementById('sheet').classList.add('open');
+}
+function refreshSheetBtn(){
+  var d=isDone(activeLotId);
+  var btn=document.getElementById('sheet-toggle');
+  btn.textContent=d?'Mark as not done':'Mark as done ✓';
+  btn.style.background=d?'#E8E5E0':'#2D5A3D';
+  btn.style.color=d?'#1B2A3B':'#fff';
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('open'); activeLotId=null; }
+
+document.getElementById('sheet-toggle').addEventListener('click',function(){
+  if(!activeLotId)return;
+  toggleDone(activeLotId);
+  var nowDone=isDone(activeLotId);
+  renderMap(); updateProgress();
+  refreshSheetBtn();
+  showToast(nowDone?'Marked done ✓':'Unmarked');
+});
+document.getElementById('sheet-close').addEventListener('click',closeSheet);
+
+// ── TOAST ──
+var toastT;
+function showToast(msg){
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(function(){el.classList.remove('show');},2000);
+}
+
+// ── PAN / ZOOM ──
+SVG.addEventListener('pointerdown',function(e){
+  if(e.pointerType==='touch')return;
+  pdown=true; didPan=false; wasDragging=false;
+  panStart={x:e.clientX,y:e.clientY}; panOrig={x:vx,y:vy};
+});
+SVG.addEventListener('pointermove',function(e){
+  if(e.pointerType==='touch')return;
+  if(!pdown)return;
+  var dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+  if(Math.abs(dx)>4||Math.abs(dy)>4){ didPan=true; wasDragging=true; }
+  if(didPan){ vx=panOrig.x+dx; vy=panOrig.y+dy; clampVP(); }
+});
+SVG.addEventListener('pointerup',function(e){
+  if(e.pointerType==='touch')return;
+  pdown=false; didPan=false;
+});
+SVG.addEventListener('wheel',function(e){
+  e.preventDefault();
+  var r=SVG.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  var raw=e.deltaY;
+  if(e.deltaMode===0)raw=raw/300; else raw=raw/3;
+  raw=Math.max(-0.2,Math.min(0.2,raw));
+  var d=1-raw;
+  vx=mx-(mx-vx)*d; vy=my-(my-vy)*d; vs*=d; clampVP();
+},{passive:false});
+
+// Touch
+SVG.addEventListener('touchstart',function(e){
+  e.preventDefault(); tMoved=false; wasDragging=false;
+  if(e.touches.length===1){ tPanStart={x:e.touches[0].clientX,y:e.touches[0].clientY}; tPanOrig={x:vx,y:vy}; tDist=null; }
+  if(e.touches.length===2){ tDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); tPanStart={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2}; tPanOrig={x:vx,y:vy}; }
+},{passive:false});
+SVG.addEventListener('touchmove',function(e){
+  e.preventDefault(); tMoved=true; wasDragging=true;
+  if(e.touches.length===2&&tDist!=null){
+    var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    var r=SVG.getBoundingClientRect(),mx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,my=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+    var ratio=1+(d/tDist-1)*0.6;
+    vx=mx-(mx-vx)*ratio; vy=my-(my-vy)*ratio; vs*=ratio; tDist=d;
+    var nmx=(e.touches[0].clientX+e.touches[1].clientX)/2,nmy=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    vx+=nmx-tPanStart.x; vy+=nmy-tPanStart.y; tPanStart={x:nmx,y:nmy};
+    clampVP(); return;
+  }
+  if(e.touches.length===1){ vx=tPanOrig.x+(e.touches[0].clientX-tPanStart.x); vy=tPanOrig.y+(e.touches[0].clientY-tPanStart.y); clampVP(); }
+},{passive:false});
+SVG.addEventListener('touchend',function(e){
+  e.preventDefault();
+  if(e.touches.length>0)return;
+  wasDragging=false;
+},{passive:false});
+
+// ── HOOD SELECTOR ──
+document.getElementById('hood-select').addEventListener('change',function(){
+  switchHood(this.value);
+});
+
+// ── BACK ──
+document.getElementById('edit-map-btn').addEventListener('click',function(){
+  sessionStorage.setItem('editHood', hoodName);
+  window.location.href='dev.html';
+});
+
+document.getElementById('back-btn').addEventListener('click',function(){
+  window.location.href='../index.html';
+});
+
+// ── HARDCODED FALLBACK: inject Scarlet Ridge if not already in storage ──
+(function(){
+  var key = 'mbhood:Scarlet Ridge';
+  if (localStorage.getItem(key)) return; // already there, don't overwrite
+  // Convert rect-based coordinates (x,y,w,h) to polygon points for each lot
+  function rect(x,y,w,h){ return [{x:x,y:y},{x:x+w,y:y},{x:x+w,y:y+h},{x:x,y:y+h}]; }
+  // Roads as 2-point centerlines with width
+  function road(x,y,w,h,name){
+    // horizontal road: centerline along y+h/2
+    if(w>h){ return {id:'r'+name,pts:[{x:x,y:y+h/2},{x:x+w,y:y+h/2}],w:h,name:name}; }
+    // vertical road: centerline along x+w/2
+    return {id:'r'+name,pts:[{x:x+w/2,y:y},{x:x+w/2,y:y+h}],w:w,name:name};
+  }
+  var E = {
+    roads: [
+      road(18,0,488,19,'Thomas Dr'),
+      road(17,0,12,477,'Tiffany Ln'),
+      road(19,140,487,16,'Jojo St'),
+      road(112,140,14,280,'Liam Ave'),
+      road(349,17,14,124,'Ricky Rd'),
+      road(407,147,14,270,'Dreyden Dr'),
+      road(20,406,485,14,'Scarlet Blvd')
+    ],
+    lots: [
+      {id:'l109',pts:rect(82,17,52,123),lot:'109',house:''},
+      {id:'l107',pts:rect(30,156,82,36),lot:'107',house:''},
+      {id:'l106',pts:rect(30,192,83,36),lot:'106',house:''},
+      {id:'l105',pts:rect(30,227,83,37),lot:'105',house:''},
+      {id:'l103',pts:rect(30,298,83,37),lot:'103',house:''},
+      {id:'l101',pts:rect(30,368,83,38),lot:'101',house:''},
+      {id:'l139',pts:rect(126,156,70,40),lot:'139',house:''},
+      {id:'l140',pts:rect(126,196,70,40),lot:'140',house:''},
+      {id:'l118',pts:rect(421,157,83,50),lot:'118',house:''},
+      {id:'l119',pts:rect(421,207,83,50),lot:'119',house:''},
+      {id:'l120',pts:rect(421,257,83,50),lot:'120',house:''},
+      {id:'l121',pts:rect(421,307,83,50),lot:'121',house:''},
+      {id:'l122',pts:rect(421,356,83,50),lot:'122',house:''},
+      {id:'l124',pts:rect(342,283,65,63),lot:'124',house:''},
+      {id:'l123',pts:rect(342,344,65,63),lot:'123',house:''},
+      {id:'l145',pts:rect(140,419,46,60),lot:'145',house:''},
+      {id:'l146',pts:rect(186,419,46,60),lot:'146',house:''},
+      {id:'l147',pts:rect(232,419,46,60),lot:'147',house:''},
+      {id:'l148',pts:rect(277,419,46,60),lot:'148',house:''},
+      {id:'l149',pts:rect(323,419,46,60),lot:'149',house:''},
+      {id:'l150',pts:rect(369,419,46,60),lot:'150',house:''},
+      {id:'l151',pts:rect(414,419,46,60),lot:'151',house:''},
+      {id:'l152',pts:rect(459,419,46,60),lot:'152',house:''}
+    ],
+    labels: [
+      {id:'lab1',x:180,y:280,text:'School'},
+      {id:'lab2',x:60,y:455,text:'Retention'}
+    ]
+  };
+  localStorage.setItem(key, JSON.stringify({name:'Scarlet Ridge',E:E,publishedAt:'hardcoded'}));
+})();
+
+// ── SUBMIT ──
+var LOGS_KEY = 'wk_logs';
+function loadLogs(){ try{ var r=localStorage.getItem(LOGS_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+function saveLogs(logs){ try{ localStorage.setItem(LOGS_KEY,JSON.stringify(logs)); }catch(e){} }
+
+function openSubmitModal(){
+  var today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Summarize all neighborhoods
+  var lines=hoods.map(function(name){
+    var raw=localStorage.getItem('mbhood:'+name);
+    if(!raw)return null;
+    var data=JSON.parse(raw);
+    var lots=(data.E&&data.E.lots)||[];
+    var doneIds=done[name]||[];
+    return name+': '+doneIds.length+' / '+lots.length+' done';
+  }).filter(Boolean);
+  document.getElementById('submit-summary').innerHTML=
+    '<strong>'+today+'</strong><br>'+lines.join('<br>');
+  document.getElementById('submit-modal').style.display='flex';
+}
+
+function closeSubmitModal(){ document.getElementById('submit-modal').style.display='none'; }
+
+function confirmSubmit(){
+  var today=new Date();
+  // Calculate Mon-Sun week range
+  var day=today.getDay(); // 0=Sun,1=Mon...
+  var diffToMon=day===0?-6:1-day;
+  var mon=new Date(today); mon.setDate(today.getDate()+diffToMon);
+  var sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  function fmt(d){ return (d.getMonth()+1)+'/'+(d.getDate()); }
+  var weekLabel=fmt(mon)+'-'+fmt(sun)+'/'+sun.getFullYear();
+  var isoDate=today.toISOString().split('T')[0];
+  // Build per-neighborhood data for all hoods
+  var neighborhoodData=hoods.map(function(name){
+    var raw=localStorage.getItem('mbhood:'+name);
+    if(!raw)return null;
+    var data=JSON.parse(raw);
+    var lots=(data.E&&data.E.lots)||[];
+    var doneIds=done[name]||[];
+    var lotRows=lots.map(function(l){
+      return{lot:l.lot||l.id, house:l.house||'', done:doneIds.indexOf(l.id)!==-1};
+    });
+    return{name:name, lots:lotRows, doneCount:doneIds.length, total:lots.length};
+  }).filter(Boolean);
+
+  var entry={
+    id: Date.now(),
+    date: isoDate,
+    weekLabel: weekLabel,
+    neighborhoods: neighborhoodData
+  };
+
+  var logs=loadLogs();
+  logs.unshift(entry);
+  saveLogs(logs);
+
+  // Clear done for ALL neighborhoods
+  hoods.forEach(function(name){ done[name]=[]; });
+  saveDone();
+  renderMap(); updateProgress();
+  closeSubmitModal();
+  showToast('Week submitted ✓');
+}
+
+document.getElementById('submit-btn').addEventListener('click', openSubmitModal);
+document.getElementById('submit-cancel').addEventListener('click', closeSubmitModal);
+document.getElementById('submit-confirm').addEventListener('click', confirmSubmit);
+
+// ── MORE MENU ──
+document.getElementById('more-btn').addEventListener('click',function(e){
+  e.stopPropagation();
+  document.getElementById('more-menu').classList.toggle('open');
+});
+document.addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); });
+document.getElementById('mm-submit').addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); openSubmitModal(); });
+document.getElementById('mm-edit').addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); sessionStorage.setItem('editHood',hoodName); window.location.href='dev.html'; });
+
+// ── INIT ──
+if(sessionStorage.getItem('auth')==='dev'){
+  document.getElementById('edit-map-btn').style.display='block';
+  document.getElementById('mm-edit').style.display='block';
+}
+loadDone();
+loadHoods();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Armstrong Landscaping</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --navy:    #1B2A3B;
+    --navy-lt: #2C3E52;
+    --gold:    #C8A96E;
+    --gold-lt: #DEC28F;
+    --cream:   #F7F4EF;
+    --white:   #FFFFFF;
+    --gray:    #8A9099;
+    --gray-lt: #E8E5E0;
+    --green:   #2D5A3D;
+    --red:     #8B2E2E;
+    --radius:  12px;
+    --shadow:  0 4px 24px rgba(27,42,59,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', sans-serif;
+    background: var(--cream);
+    color: var(--navy);
+    overscroll-behavior: none;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; min-height: 100vh; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ── LOGIN SCREEN ── */
+  #screen-login {
+    background: var(--navy);
+    align-items: center;
+    justify-content: center;
+    padding: 40px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #screen-login::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 320px; height: 320px;
+    border-radius: 50%;
+    background: rgba(200,169,110,0.07);
+    pointer-events: none;
+  }
+  #screen-login::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: -60px;
+    width: 240px; height: 240px;
+    border-radius: 50%;
+    background: rgba(200,169,110,0.05);
+    pointer-events: none;
+  }
+
+  .login-logo {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .login-logo .wordmark {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--white);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+  .login-logo .sub {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+  .login-logo .divider {
+    width: 32px;
+    height: 1px;
+    background: var(--gold);
+    margin: 12px auto 0;
+    opacity: 0.6;
+  }
+
+  .login-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(200,169,110,0.2);
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .login-card label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gold);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .pin-dots {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+  .pin-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    background: transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pin-dot.filled {
+    background: var(--gold);
+    border-color: var(--gold);
+  }
+
+  .pin-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .key {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    color: var(--white);
+    font-family: 'Inter', sans-serif;
+    font-size: 20px;
+    font-weight: 400;
+    padding: 16px;
+    cursor: pointer;
+    transition: background 0.12s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .key:active { background: rgba(200,169,110,0.25); }
+  .key.del { font-size: 15px; color: var(--gray); }
+  .key.enter {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--navy);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+  .key.enter:active { background: var(--gold-lt); }
+
+  .login-error {
+    color: #E07070;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 14px;
+    min-height: 18px;
+    transition: opacity 0.2s;
+  }
+
+  /* ── WELCOME SCREEN ── */
+  #screen-welcome {
+    background: var(--cream);
+  }
+
+  .welcome-header {
+    background: var(--navy);
+    padding: 52px 28px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .welcome-header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 24px;
+    background: var(--cream);
+    border-radius: 24px 24px 0 0;
+  }
+  .welcome-eyebrow {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .welcome-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--white);
+    line-height: 1.25;
+  }
+  .welcome-title span { color: var(--gold); }
+
+  .welcome-body {
+    flex: 1;
+    padding: 28px 20px 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gray);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    padding-left: 2px;
+  }
+
+  .menu-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    padding: 20px 18px;
+    gap: 16px;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s, box-shadow 0.12s;
+    border: 1px solid transparent;
+  }
+  .menu-card:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 10px rgba(27,42,59,0.08);
+  }
+  .menu-card.primary { border-color: var(--gold); }
+
+  .card-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .card-icon.green  { background: #EAF2ED; }
+  .card-icon.navy   { background: #E8ECF0; }
+  .card-icon.gold   { background: #F8F2E8; }
+
+  .card-text { flex: 1; }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  .card-desc {
+    font-size: 12px;
+    color: var(--gray);
+    line-height: 1.4;
+  }
+
+  .card-arrow {
+    color: var(--gray);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .welcome-footer {
+    padding: 16px 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-brand {
+    font-size: 11px;
+    color: var(--gray);
+    letter-spacing: 0.05em;
+  }
+  .logout-btn {
+    font-size: 12px;
+    color: var(--gray);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
+    font-family: 'Inter', sans-serif;
+  }
+  .logout-btn:active { color: var(--navy); }
+
+  /* ── DEV BADGE ── */
+  .dev-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--gold);
+    color: var(--navy);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 20px;
+    margin-left: 10px;
+    vertical-align: middle;
+  }
+
+  .dev-section {
+    margin-top: 4px;
+  }
+
+  .menu-card.dev-card {
+    border-color: rgba(200,169,110,0.4);
+    background: #FFFDF8;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-logo">
+    <div class="wordmark">Armstrong Landscaping<br>+ Flagship</div>
+    <div class="divider"></div>
+    <div class="sub">Field Operations</div>
+  </div>
+
+  <div class="login-card">
+    <label>Enter PIN</label>
+    <div class="pin-dots">
+      <div class="pin-dot" id="dot0"></div>
+      <div class="pin-dot" id="dot1"></div>
+      <div class="pin-dot" id="dot2"></div>
+      <div class="pin-dot" id="dot3"></div>
+    </div>
+
+    <div class="pin-keypad">
+      <button class="key" onclick="pressKey('1')">1</button>
+      <button class="key" onclick="pressKey('2')">2</button>
+      <button class="key" onclick="pressKey('3')">3</button>
+      <button class="key" onclick="pressKey('4')">4</button>
+      <button class="key" onclick="pressKey('5')">5</button>
+      <button class="key" onclick="pressKey('6')">6</button>
+      <button class="key" onclick="pressKey('7')">7</button>
+      <button class="key" onclick="pressKey('8')">8</button>
+      <button class="key" onclick="pressKey('9')">9</button>
+      <button class="key del" onclick="deleteKey()">⌫</button>
+      <button class="key" onclick="pressKey('0')">0</button>
+      <button class="key enter" onclick="submitPin()">Enter</button>
+    </div>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     WELCOME SCREEN
+══════════════════════════════════════ -->
+<div id="screen-welcome" class="screen">
+  <div class="welcome-header">
+    <div class="welcome-eyebrow">Armstrong Landscaping + Flagship</div>
+    <div class="welcome-title">
+      Good <span id="timeGreeting">morning</span>,<br>welcome back.
+    </div>
+  </div>
+
+  <div class="welcome-body">
+    <div class="section-label">What would you like to do?</div>
+
+    <div class="menu-card primary" onclick="go('pages/week.html')">
+      <div class="card-icon green">🌿</div>
+      <div class="card-text">
+        <div class="card-title">Start a new week</div>
+        <div class="card-desc">Set dates and begin logging lots</div>
+      </div>
+      <div class="card-arrow">›</div>
+    </div>
+
+    <div class="menu-card" onclick="go('pages/logs.html')">
+      <div class="card-icon navy">📋</div>
+      <div class="card-text">
+        <div class="card-title">Past logs</div>
+        <div class="card-desc">View and export previous weeks</div>
+      </div>
+      <div class="card-arrow">›</div>
+    </div>
+
+    <div class="menu-card" onclick="go('pages/lots.html')">
+      <div class="card-icon gold">🏠</div>
+      <div class="card-text">
+        <div class="card-title">Update lots</div>
+        <div class="card-desc">Manage lot status and sold homes</div>
+      </div>
+      <div class="card-arrow">›</div>
+    </div>
+
+    <!-- Dev section — only shown when logged in as dev -->
+    <div id="devSection" class="dev-section" style="display:none">
+      <div class="section-label" style="margin-top:8px">
+        Developer tools
+        <span class="dev-badge">DEV</span>
+      </div>
+      <div class="menu-card dev-card" onclick="go('pages/dev.html')">
+        <div class="card-icon gold">🗺️</div>
+        <div class="card-text">
+          <div class="card-title">Map builder</div>
+          <div class="card-desc">Create and edit neighborhood maps</div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="welcome-footer">
+    <span class="footer-brand">Flagship Homes · Eagle Mountain, UT</span>
+    <button class="logout-btn" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<script>
+  const USER_PIN = '1234';
+  const DEV_PIN  = '9999';
+
+  let pinBuffer = '';
+  let isDev = false;
+
+  function pressKey(k) {
+    if (pinBuffer.length >= 4) return;
+    pinBuffer += k;
+    updateDots();
+    if (pinBuffer.length === 4) setTimeout(submitPin, 120);
+  }
+
+  function deleteKey() {
+    pinBuffer = pinBuffer.slice(0, -1);
+    updateDots();
+    document.getElementById('loginError').textContent = '';
+  }
+
+  function updateDots() {
+    for (let i = 0; i < 4; i++) {
+      document.getElementById('dot' + i).classList.toggle('filled', i < pinBuffer.length);
+    }
+  }
+
+  function submitPin() {
+    if (pinBuffer === USER_PIN) {
+      isDev = false;
+      login();
+    } else if (pinBuffer === DEV_PIN) {
+      isDev = true;
+      login();
+    } else {
+      document.getElementById('loginError').textContent = 'Incorrect PIN. Try again.';
+      pinBuffer = '';
+      updateDots();
+    }
+  }
+
+  function login() {
+    sessionStorage.setItem('auth', isDev ? 'dev' : 'user');
+    document.getElementById('devSection').style.display = isDev ? 'block' : 'none';
+    setGreeting();
+    show('screen-welcome');
+  }
+
+  function logout() {
+    sessionStorage.removeItem('auth');
+    pinBuffer = '';
+    updateDots();
+    document.getElementById('loginError').textContent = '';
+    show('screen-login');
+  }
+
+  function setGreeting() {
+    const h = new Date().getHours();
+    const g = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+    document.getElementById('timeGreeting').textContent = g;
+  }
+
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function go(page) {
+    window.location.href = page;
+  }
+
+  // Check if already authenticated (e.g. back button)
+  window.addEventListener('DOMContentLoaded', () => {
+    const auth = sessionStorage.getItem('auth');
+    if (auth) {
+      isDev = auth === 'dev';
+      document.getElementById('devSection').style.display = isDev ? 'block' : 'none';
+      setGreeting();
+      show('screen-welcome');
+    }
+  });
+</script>
+</body>
+</html>

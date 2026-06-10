@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Past Logs</title>
+<script>(function(){ if(!sessionStorage.getItem('auth')) window.location.href='../index.html'; })();</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --navy:#1B2A3B;--gold:#C8A96E;--gold-lt:#DEC28F;--cream:#F7F4EF;
+  --white:#fff;--gray:#8A9099;--gray-lt:#E8E5E0;--green:#2D5A3D;--green-lt:#EAF2ED;
+  --radius:12px;--shadow:0 4px 24px rgba(27,42,59,0.10);
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--cream);color:var(--navy);overscroll-behavior:none}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+#topbar{height:52px;background:var(--navy);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
+#back-btn{color:var(--gold);font-size:20px;background:none;border:none;cursor:pointer;padding:4px 2px}
+.tbar-title{font-size:15px;font-weight:600;color:#fff;flex:1}
+#export-btn{height:30px;padding:0 11px;border:none;border-radius:7px;background:var(--gold);color:var(--navy);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+#body{flex:1;overflow-y:auto;padding:16px 14px 40px}
+
+.empty{text-align:center;padding:60px 20px;color:var(--gray)}
+.empty .icon{font-size:36px;margin-bottom:12px}
+.empty h2{font-size:16px;font-weight:600;margin-bottom:6px;color:var(--navy)}
+.empty p{font-size:13px;line-height:1.6}
+
+.week-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.week-header{display:flex;align-items:center;padding:14px 16px;gap:12px;cursor:pointer}
+.week-title{font-size:14px;font-weight:700;color:var(--navy);flex:1}
+.week-sub{font-size:11px;color:var(--gray);margin-top:2px}
+.week-chevron{color:var(--gray);font-size:16px;transition:transform 0.2s;flex-shrink:0}
+.week-card.open .week-chevron{transform:rotate(90deg)}
+.week-detail{display:none;border-top:1px solid var(--gray-lt);overflow-x:auto}
+.week-card.open .week-detail{display:block}
+
+/* Side-by-side neighborhood tables */
+.hood-tables{display:flex;gap:0;min-width:min-content}
+.hood-table{flex:0 0 auto;min-width:140px;border-right:1px solid var(--gray-lt)}
+.hood-table:last-child{border-right:none}
+.hood-name{font-size:10px;font-weight:700;color:var(--navy);letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px 6px;background:#f9f7f4;border-bottom:1px solid var(--gray-lt)}
+.hood-table table{width:100%;border-collapse:collapse;font-size:11px}
+.hood-table th{padding:5px 8px;text-align:left;color:var(--gray);font-weight:600;font-size:10px;border-bottom:1px solid var(--gray-lt);white-space:nowrap}
+.hood-table td{padding:5px 8px;border-bottom:1px solid #f0ede8;color:var(--navy)}
+.hood-table tr:last-child td{border-bottom:none}
+.done-yes{color:var(--green);font-weight:600}
+.done-no{color:var(--gray)}
+
+#more-btn{height:30px;width:34px;border:1px solid var(--bord,#e0ddd5);border-radius:7px;background:var(--surf,#fff);font-size:18px;cursor:pointer;color:var(--txt,#1a1a18);display:none;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+#more-menu{position:absolute;top:52px;right:8px;background:var(--surf,#fff);border:1px solid var(--bord,#e0ddd5);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:100;min-width:160px;overflow:hidden;display:none}
+#more-menu.open{display:block}
+.more-item{display:flex;align-items:center;padding:11px 14px;font-size:13px;cursor:pointer;color:var(--txt,#1a1a18);border-bottom:1px solid var(--bord,#e0ddd5);white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;width:100%;text-align:left;font-family:inherit}
+.more-item:last-child{border-bottom:none}
+.more-item:active{background:#f5f3ee}
+.more-item.danger{color:#c0392b}
+.more-item.pri{color:#3d6b45;font-weight:600}
+@media(max-width:600px){#more-btn{display:flex}}
+@media(max-width:600px){#export-btn{display:none}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="back-btn">‹</button>
+  <div class="tbar-title">Past Logs</div>
+  <button id="export-btn">⬇ Export CSV</button>
+  <button id="more-btn">⋯</button>
+</div>
+<div id="more-menu">
+  <button class="more-item pri" id="mm-export">⬇ Export CSV</button>
+</div>
+
+<div id="body">
+  <div id="log-list"></div>
+</div>
+
+<script>
+(function(){
+
+var LOGS_KEY='wk_logs';
+function loadLogs(){ try{ var r=localStorage.getItem(LOGS_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+
+function fmtDate(entry){
+  // Use stored weekLabel if available, otherwise calculate from date
+  if(entry.weekLabel) return 'Week of '+entry.weekLabel;
+  try{
+    var d=new Date(entry.date+'T12:00:00');
+    var day=d.getDay(), diffToMon=day===0?-6:1-day;
+    var mon=new Date(d); mon.setDate(d.getDate()+diffToMon);
+    var sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    function fmt(x){ return (x.getMonth()+1)+'/'+(x.getDate()); }
+    return 'Week of '+fmt(mon)+'-'+fmt(sun)+'/'+sun.getFullYear();
+  }catch(e){ return entry.date||''; }
+}
+
+function getSold(){
+  try{ return JSON.parse(localStorage.getItem('wk_sold')||'{}'); }catch(e){ return {}; }
+}
+function isLotSold(hoodName, lotNum){
+  // sold is keyed by hood name, values are lot IDs — but we need to match by lot number
+  // So we cross-ref against the published map to find the id
+  try{
+    var raw=localStorage.getItem('mbhood:'+hoodName);
+    if(!raw)return false;
+    var data=JSON.parse(raw);
+    var sold=getSold();
+    var soldIds=sold[hoodName]||[];
+    var lot=(data.E&&data.E.lots||[]).find(function(l){ return l.lot===lotNum; });
+    return lot ? soldIds.indexOf(lot.id)!==-1 : false;
+  }catch(e){ return false; }
+}
+
+function render(){
+  var logs=loadLogs();
+  var list=document.getElementById('log-list');
+  list.innerHTML='';
+
+  if(!logs.length){
+    list.innerHTML='<div class="empty"><div class="icon">📋</div><h2>No logs yet</h2><p>Submit a week from the map page and it will appear here.</p></div>';
+    return;
+  }
+
+  logs.forEach(function(entry){
+    var hoods=entry.neighborhoods||[];
+
+    // Filter sold lots out of display
+    var filteredHoods=hoods.map(function(h){
+      return Object.assign({},h,{lots:(h.lots||[]).filter(function(l){ return !isLotSold(h.name,l.lot); })});
+    });
+
+    var totalDone=filteredHoods.reduce(function(s,h){return s+h.lots.filter(function(l){return l.done;}).length;},0);
+    var totalLots=filteredHoods.reduce(function(s,h){return s+h.lots.length;},0);
+
+    var card=document.createElement('div');
+    card.className='week-card';
+
+    // Header with export button
+    var hdr=document.createElement('div');
+    hdr.className='week-header';
+    hdr.innerHTML=
+      '<div style="flex:1">'+
+        '<div class="week-title">'+fmtDate(entry)+'</div>'+
+        '<div class="week-sub">'+filteredHoods.map(function(h){
+          var d=h.lots.filter(function(l){return l.done;}).length;
+          return h.name+': '+d+'/'+h.lots.length;
+        }).join(' · ')+'</div>'+
+      '</div>'+
+      '<div class="week-chevron">›</div>';
+
+    var exportWeekBtn=document.createElement('button');
+    exportWeekBtn.textContent='⬇';
+    exportWeekBtn.title='Export this week';
+    exportWeekBtn.style.cssText='height:28px;padding:0 9px;border:1px solid var(--gold);border-radius:7px;background:transparent;color:var(--gold);font-size:13px;cursor:pointer;margin-right:8px;flex-shrink:0';
+    exportWeekBtn.addEventListener('click',function(e){
+      e.stopPropagation();
+      exportSingleWeek(entry, filteredHoods);
+    });
+
+    hdr.insertBefore(exportWeekBtn, hdr.querySelector('.week-chevron'));
+    hdr.addEventListener('click',function(){ card.classList.toggle('open'); });
+    card.appendChild(hdr);
+
+    // Detail tables (sold lots already filtered out)
+    var detail=document.createElement('div');
+    detail.className='week-detail';
+    var tablesWrap=document.createElement('div');
+    tablesWrap.className='hood-tables';
+
+    filteredHoods.forEach(function(h){
+      var col=document.createElement('div');
+      col.className='hood-table';
+      var nameEl=document.createElement('div');
+      nameEl.className='hood-name';
+      nameEl.textContent=h.name;
+      col.appendChild(nameEl);
+
+      var tbl=document.createElement('table');
+      tbl.innerHTML='<thead><tr><th>Lot #</th><th>House #</th><th>Done?</th></tr></thead>';
+      var tbody=document.createElement('tbody');
+      (h.lots||[]).forEach(function(l){
+        var tr=document.createElement('tr');
+        tr.innerHTML=
+          '<td>'+l.lot+'</td>'+
+          '<td>'+(l.house||'—')+'</td>'+
+          '<td class="'+(l.done?'done-yes':'done-no')+'">'+(l.done?'Yes':'No')+'</td>';
+        tbody.appendChild(tr);
+      });
+      tbl.appendChild(tbody);
+      col.appendChild(tbl);
+      tablesWrap.appendChild(col);
+    });
+
+    detail.appendChild(tablesWrap);
+    card.appendChild(detail);
+    list.appendChild(card);
+  });
+}
+
+function buildCSVRows(entry, hoods){
+  var rows=[];
+
+  // Row 1: "Week of xx/xx-xx/xx/xxxx" then empty cells for remaining columns
+  var totalCols=hoods.length*3+(hoods.length-1); // 3 cols per hood + separator blanks
+  var r1=[fmtDate(entry)];
+  for(var i=1;i<totalCols;i++) r1.push('');
+  rows.push(r1);
+
+  // Row 2: neighborhood names, each spanning 3 cols, separated by a blank
+  var r2=[];
+  hoods.forEach(function(h,i){
+    if(i>0) r2.push('');
+    r2.push(h.name,'','');
+  });
+  rows.push(r2);
+
+  // Row 3: column headers per neighborhood
+  var r3=[];
+  hoods.forEach(function(h,i){
+    if(i>0) r3.push('');
+    r3.push('Lot #','House #','Done? yes/no');
+  });
+  rows.push(r3);
+
+  // Data rows — zip all neighborhoods together
+  var maxRows=hoods.reduce(function(m,h){ return Math.max(m,(h.lots||[]).length); },0);
+  for(var r=0;r<maxRows;r++){
+    var row=[];
+    hoods.forEach(function(h,i){
+      if(i>0) row.push('');
+      var l=(h.lots||[])[r];
+      if(l){ row.push(l.lot, l.house||'-', l.done?'Yes':'No'); }
+      else  { row.push('','',''); }
+    });
+    rows.push(row);
+  }
+
+  rows.push([]); // blank row between weeks
+  return rows;
+}
+
+function rowsToCSV(rows){
+  return rows.map(function(r){
+    return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(',');
+  }).join('\n');
+}
+
+function exportSingleWeek(entry, filteredHoods){
+  var rows=buildCSVRows(entry, filteredHoods);
+  var csv=rowsToCSV(rows);
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download='log-'+entry.date+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(){
+  var logs=loadLogs();
+  if(!logs.length){ alert('No logs to export yet.'); return; }
+  var allRows=[];
+  logs.forEach(function(entry){
+    var hoods=entry.neighborhoods||[];
+    var filtered=hoods.map(function(h){
+      return Object.assign({},h,{lots:(h.lots||[]).filter(function(l){ return !isLotSold(h.name,l.lot); })});
+    });
+    allRows=allRows.concat(buildCSVRows(entry,filtered));
+  });
+  var csv=rowsToCSV(allRows);
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download='landscaping-logs-all.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('back-btn').addEventListener('click',function(){ window.location.href='../index.html'; });
+document.getElementById('export-btn').addEventListener('click',exportCSV);
+document.getElementById('more-btn').addEventListener('click',function(e){ e.stopPropagation(); document.getElementById('more-menu').classList.toggle('open'); });
+document.getElementById('mm-export').addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); exportCSV(); });
+document.addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); });
+
+render();
+
+})();
+</script>
+</body>
+</html>
