@@ -76,11 +76,11 @@ body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
   <div id="log-list"></div>
 </div>
 
+<script src="db.js"></script>
 <script>
 (function(){
 
-var LOGS_KEY='wk_logs';
-function loadLogs(){ try{ var r=localStorage.getItem(LOGS_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+// logs loaded from Firebase in render()
 
 function fmtDate(entry){
   // Use stored weekLabel if available, otherwise calculate from date
@@ -95,16 +95,15 @@ function fmtDate(entry){
   }catch(e){ return entry.date||''; }
 }
 
+var _soldCache=null;
 function getSold(){
-  try{ return JSON.parse(localStorage.getItem('wk_sold')||'{}'); }catch(e){ return {}; }
+  return _soldCache||{};
 }
+var _hoodCache={};
 function isLotSold(hoodName, lotNum){
-  // sold is keyed by hood name, values are lot IDs — but we need to match by lot number
-  // So we cross-ref against the published map to find the id
   try{
-    var raw=localStorage.getItem('mbhood:'+hoodName);
-    if(!raw)return false;
-    var data=JSON.parse(raw);
+    var data=_hoodCache[hoodName];
+    if(!data)return false;
     var sold=getSold();
     var soldIds=sold[hoodName]||[];
     var lot=(data.E&&data.E.lots||[]).find(function(l){ return l.lot===lotNum; });
@@ -113,7 +112,7 @@ function isLotSold(hoodName, lotNum){
 }
 
 function render(){
-  var logs=loadLogs();
+  var logs=_allLogs||[];
   var list=document.getElementById('log-list');
   list.innerHTML='';
 
@@ -257,7 +256,7 @@ function exportSingleWeek(entry, filteredHoods){
 }
 
 function exportCSV(){
-  var logs=loadLogs();
+  var logs=_allLogs||[];
   if(!logs.length){ alert('No logs to export yet.'); return; }
   var allRows=[];
   logs.forEach(function(entry){
@@ -281,7 +280,11 @@ document.getElementById('more-btn').addEventListener('click',function(e){ e.stop
 document.getElementById('mm-export').addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); exportCSV(); });
 document.addEventListener('click',function(){ document.getElementById('more-menu').classList.remove('open'); });
 
-render();
+DB.getSold().then(function(s){ _soldCache=s||{}; return DB.getNeighborhoods(); }).then(function(hoods){
+  var names=Object.values(hoods||{}).map(function(h){return h.name;});
+  return Promise.all(names.map(function(n){ return DB.getNeighborhood(n).then(function(d){ _hoodCache[n]=d; }); }));
+}).then(function(){ return DB.getLogs(); }).then(function(logs){ _allLogs=logs; render(); }).catch(function(){ render(); });
+var _allLogs=[];
 
 })();
 </script>

@@ -127,6 +127,7 @@ body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
   </div>
 </div>
 
+<script src="db.js"></script>
 <script>
 (function(){
 
@@ -146,48 +147,40 @@ var wasDragging=false;
 var SVG = document.getElementById('map-svg');
 
 // ── STORAGE ──
-var DONE_KEY = 'wk_done';
-var SOLD_KEY = 'wk_sold';
-function loadDone(){ try{ var r=localStorage.getItem(DONE_KEY); done=r?JSON.parse(r):{}; }catch(e){ done={}; } }
-function saveDone(){ try{ localStorage.setItem(DONE_KEY,JSON.stringify(done)); }catch(e){} }
+var soldCache = {};
 function doneList(){ return done[hoodName]||(done[hoodName]=[]); }
 function isDone(id){ return doneList().indexOf(id)!==-1; }
 function toggleDone(id){
   var list=doneList(), idx=list.indexOf(id);
   if(idx===-1) list.push(id); else list.splice(idx,1);
-  done[hoodName]=list; saveDone();
+  done[hoodName]=list;
+  DB.setDoneForHood(hoodName, list).catch(function(){});
 }
-function isSold(id){ try{ var s=JSON.parse(localStorage.getItem(SOLD_KEY)||'{}'); return((s[hoodName]||[]).indexOf(id)!==-1); }catch(e){return false;} }
+function isSold(id){ return((soldCache[hoodName]||[]).indexOf(id)!==-1); }
 
 // ── LOAD NEIGHBORHOODS ──
 function loadHoods(){
-  hoods=[];
-  for(var i=0;i<localStorage.length;i++){
-    var k=localStorage.key(i);
-    if(k&&k.startsWith('mbhood:')) hoods.push(k.replace('mbhood:',''));
-  }
-  var sel=document.getElementById('hood-select');
-  sel.innerHTML='';
-  if(!hoods.length){
-    sel.innerHTML='<option value="">No maps published</option>';
-    showEmpty(); return;
-  }
-  hoods.forEach(function(n){
-    var o=document.createElement('option');
-    o.value=n; o.textContent=n; sel.appendChild(o);
-  });
-  switchHood(hoods[0]);
+  showHint('Loading maps…');
+  Promise.all([DB.getNeighborhoods(), DB.getDone(), DB.getSold()]).then(function(results){
+    var hoodObj=results[0]||{}, doneData=results[1]||{}, soldData=results[2]||{};
+    hoods=Object.values(hoodObj).map(function(h){return h.name;});
+    done=doneData; soldCache=soldData;
+    var sel=document.getElementById('hood-select');
+    sel.innerHTML='';
+    if(!hoods.length){ sel.innerHTML='<option value="">No maps published</option>'; showEmpty(); return; }
+    hoods.forEach(function(n){ var o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+    switchHood(hoods[0]);
+  }).catch(function(){ showEmpty(); showHint('Could not load maps from server'); });
 }
 
 function switchHood(name){
   hoodName=name;
-  try{
-    var raw=localStorage.getItem('mbhood:'+name);
-    if(!raw){ showEmpty(); return; }
-    hoodData=JSON.parse(raw);
+  DB.getNeighborhood(name).then(function(data){
+    if(!data){ showEmpty(); return; }
+    hoodData={E:data.E||{}};
     document.getElementById('empty-state').style.display='none';
     recenter(); renderMap(); updateProgress();
-  }catch(e){ showEmpty(); }
+  }).catch(function(){ showEmpty(); });
 }
 
 function showEmpty(){
@@ -464,125 +457,35 @@ document.getElementById('back-btn').addEventListener('click',function(){
   window.location.href='../index.html';
 });
 
-// ── HARDCODED FALLBACK: inject Scarlet Ridge if not already in storage ──
-(function(){
-  var key = 'mbhood:Scarlet Ridge';
-  if (localStorage.getItem(key)) return; // already there, don't overwrite
-  // Convert rect-based coordinates (x,y,w,h) to polygon points for each lot
-  function rect(x,y,w,h){ return [{x:x,y:y},{x:x+w,y:y},{x:x+w,y:y+h},{x:x,y:y+h}]; }
-  // Roads as 2-point centerlines with width
-  function road(x,y,w,h,name){
-    // horizontal road: centerline along y+h/2
-    if(w>h){ return {id:'r'+name,pts:[{x:x,y:y+h/2},{x:x+w,y:y+h/2}],w:h,name:name}; }
-    // vertical road: centerline along x+w/2
-    return {id:'r'+name,pts:[{x:x+w/2,y:y},{x:x+w/2,y:y+h}],w:w,name:name};
-  }
-  var E = {
-    roads: [
-      road(18,0,488,19,'Thomas Dr'),
-      road(17,0,12,477,'Tiffany Ln'),
-      road(19,140,487,16,'Jojo St'),
-      road(112,140,14,280,'Liam Ave'),
-      road(349,17,14,124,'Ricky Rd'),
-      road(407,147,14,270,'Dreyden Dr'),
-      road(20,406,485,14,'Scarlet Blvd')
-    ],
-    lots: [
-      {id:'l109',pts:rect(82,17,52,123),lot:'109',house:''},
-      {id:'l107',pts:rect(30,156,82,36),lot:'107',house:''},
-      {id:'l106',pts:rect(30,192,83,36),lot:'106',house:''},
-      {id:'l105',pts:rect(30,227,83,37),lot:'105',house:''},
-      {id:'l103',pts:rect(30,298,83,37),lot:'103',house:''},
-      {id:'l101',pts:rect(30,368,83,38),lot:'101',house:''},
-      {id:'l139',pts:rect(126,156,70,40),lot:'139',house:''},
-      {id:'l140',pts:rect(126,196,70,40),lot:'140',house:''},
-      {id:'l118',pts:rect(421,157,83,50),lot:'118',house:''},
-      {id:'l119',pts:rect(421,207,83,50),lot:'119',house:''},
-      {id:'l120',pts:rect(421,257,83,50),lot:'120',house:''},
-      {id:'l121',pts:rect(421,307,83,50),lot:'121',house:''},
-      {id:'l122',pts:rect(421,356,83,50),lot:'122',house:''},
-      {id:'l124',pts:rect(342,283,65,63),lot:'124',house:''},
-      {id:'l123',pts:rect(342,344,65,63),lot:'123',house:''},
-      {id:'l145',pts:rect(140,419,46,60),lot:'145',house:''},
-      {id:'l146',pts:rect(186,419,46,60),lot:'146',house:''},
-      {id:'l147',pts:rect(232,419,46,60),lot:'147',house:''},
-      {id:'l148',pts:rect(277,419,46,60),lot:'148',house:''},
-      {id:'l149',pts:rect(323,419,46,60),lot:'149',house:''},
-      {id:'l150',pts:rect(369,419,46,60),lot:'150',house:''},
-      {id:'l151',pts:rect(414,419,46,60),lot:'151',house:''},
-      {id:'l152',pts:rect(459,419,46,60),lot:'152',house:''}
-    ],
-    labels: [
-      {id:'lab1',x:180,y:280,text:'School'},
-      {id:'lab2',x:60,y:455,text:'Retention'}
-    ]
-  };
-  localStorage.setItem(key, JSON.stringify({name:'Scarlet Ridge',E:E,publishedAt:'hardcoded'}));
-})();
+
 
 // ── SUBMIT ──
-var LOGS_KEY = 'wk_logs';
-function loadLogs(){ try{ var r=localStorage.getItem(LOGS_KEY); return r?JSON.parse(r):[]; }catch(e){ return []; } }
-function saveLogs(logs){ try{ localStorage.setItem(LOGS_KEY,JSON.stringify(logs)); }catch(e){} }
-
 function openSubmitModal(){
   var today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  // Summarize all neighborhoods
-  var lines=hoods.map(function(name){
-    var raw=localStorage.getItem('mbhood:'+name);
-    if(!raw)return null;
-    var data=JSON.parse(raw);
-    var lots=(data.E&&data.E.lots)||[];
-    var doneIds=done[name]||[];
-    return name+': '+doneIds.length+' / '+lots.length+' done';
-  }).filter(Boolean);
-  document.getElementById('submit-summary').innerHTML=
-    '<strong>'+today+'</strong><br>'+lines.join('<br>');
+  var lines=hoods.map(function(name){ return name+': '+(done[name]||[]).length+' done'; });
+  document.getElementById('submit-summary').innerHTML='<strong>'+today+'</strong><br>'+lines.join('<br>');
   document.getElementById('submit-modal').style.display='flex';
 }
-
 function closeSubmitModal(){ document.getElementById('submit-modal').style.display='none'; }
-
 function confirmSubmit(){
-  var today=new Date();
-  // Calculate Mon-Sun week range
-  var day=today.getDay(); // 0=Sun,1=Mon...
-  var diffToMon=day===0?-6:1-day;
+  showToast('Submitting…'); closeSubmitModal();
+  var today=new Date(), day=today.getDay(), diffToMon=day===0?-6:1-day;
   var mon=new Date(today); mon.setDate(today.getDate()+diffToMon);
   var sun=new Date(mon); sun.setDate(mon.getDate()+6);
   function fmt(d){ return (d.getMonth()+1)+'/'+(d.getDate()); }
   var weekLabel=fmt(mon)+'-'+fmt(sun)+'/'+sun.getFullYear();
   var isoDate=today.toISOString().split('T')[0];
-  // Build per-neighborhood data for all hoods
-  var neighborhoodData=hoods.map(function(name){
-    var raw=localStorage.getItem('mbhood:'+name);
-    if(!raw)return null;
-    var data=JSON.parse(raw);
-    var lots=(data.E&&data.E.lots)||[];
-    var doneIds=done[name]||[];
-    var lotRows=lots.map(function(l){
-      return{lot:l.lot||l.id, house:l.house||'', done:doneIds.indexOf(l.id)!==-1};
+  Promise.all(hoods.map(function(name){
+    return DB.getNeighborhood(name).then(function(data){
+      var lots=(data&&data.E&&data.E.lots)||[], doneIds=done[name]||[];
+      return{name:name,lots:lots.map(function(l){return{lot:l.lot||l.id,house:l.house||'',done:doneIds.indexOf(l.id)!==-1};}),doneCount:doneIds.length,total:lots.length};
     });
-    return{name:name, lots:lotRows, doneCount:doneIds.length, total:lots.length};
-  }).filter(Boolean);
-
-  var entry={
-    id: Date.now(),
-    date: isoDate,
-    weekLabel: weekLabel,
-    neighborhoods: neighborhoodData
-  };
-
-  var logs=loadLogs();
-  logs.unshift(entry);
-  saveLogs(logs);
-
-  // Clear done for ALL neighborhoods
-  hoods.forEach(function(name){ done[name]=[]; });
-  saveDone();
-  renderMap(); updateProgress();
-  closeSubmitModal();
-  showToast('Week submitted ✓');
+  })).then(function(nd){
+    return DB.addLog({id:Date.now(),date:isoDate,weekLabel:weekLabel,neighborhoods:nd});
+  }).then(function(){
+    return Promise.all(hoods.map(function(name){ done[name]=[]; return DB.setDoneForHood(name,[]); }));
+  }).then(function(){ renderMap(); updateProgress(); showToast('Week submitted ✓'); })
+  .catch(function(e){ showToast('Submit failed: '+e.message); });
 }
 
 document.getElementById('submit-btn').addEventListener('click', openSubmitModal);
@@ -603,7 +506,6 @@ if(sessionStorage.getItem('auth')==='dev'){
   document.getElementById('edit-map-btn').style.display='block';
   document.getElementById('mm-edit').style.display='block';
 }
-loadDone();
 loadHoods();
 
 })();

@@ -166,6 +166,7 @@ body{background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI
 </div>
 <input type="file" id="img-file" accept="image/*" style="display:none">
 
+<script src="db.js"></script>
 <script>
 (function() {
 // ===== STATE =====
@@ -194,9 +195,8 @@ var gH = document.getElementById('g-handles');
 // ===== SAVE / LOAD =====
 function doSave() {
   if (draftName === 'Unsaved') return;
-  try {
-    localStorage.setItem('mbdraft:' + draftName, JSON.stringify({ E:E, nid:nid }));
-  } catch(e) { alert('Save failed: ' + e.message); }
+  // drafts stay local — only published maps go to Firebase
+  try { localStorage.setItem('mbdraft:' + draftName, JSON.stringify({ E:E, nid:nid })); } catch(e) {}
 }
 
 function saveDraft() {
@@ -216,25 +216,31 @@ function saveDraft() {
 
 function openDrafts() {
   var list = document.getElementById('dl');
-  list.innerHTML = '';
-  var keys = [];
+  list.innerHTML = '<p style="font-size:12px;color:var(--muted)">Loading…</p>';
+  document.getElementById('drafts-modal').classList.add('vis');
+  // Show local drafts + Firebase published maps
+  var localKeys = [];
   for (var i = 0; i < localStorage.length; i++) {
     var k = localStorage.key(i);
-    if (k && k.startsWith('mbdraft:')) keys.push(k);
+    if (k && k.startsWith('mbdraft:')) localKeys.push(k.replace('mbdraft:',''));
   }
-  if (!keys.length) {
-    list.innerHTML = '<p style="font-size:12px;color:var(--muted)">No drafts yet. Draw something and hit Save.</p>';
-  } else {
-    keys.forEach(function(k) {
-      var name = k.replace('mbdraft:', '');
+  DB.getNeighborhoods().then(function(hoods) {
+    var fbNames = Object.values(hoods).map(function(h){ return h.name; });
+    var all = localKeys.slice();
+    fbNames.forEach(function(n){ if(all.indexOf(n)===-1) all.push(n); });
+    list.innerHTML = '';
+    if (!all.length) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--muted)">No drafts yet.</p>';
+      return;
+    }
+    all.forEach(function(name) {
       var item = document.createElement('div');
       item.className = 'di';
       item.innerHTML = '<span>' + name + '</span><small>tap to load</small>';
       item.onclick = function() { closeDraftsModal(); loadDraft(name); };
       list.appendChild(item);
     });
-  }
-  document.getElementById('drafts-modal').classList.add('vis');
+  }).catch(function(){ list.innerHTML = '<p style="font-size:12px;color:var(--muted)">Error loading drafts.</p>'; });
 }
 
 function closeDraftsModal() { document.getElementById('drafts-modal').classList.remove('vis'); }
@@ -250,17 +256,28 @@ function newMap() {
 }
 
 function loadDraft(name) {
-  try {
-    // Try draft first, then fall back to published neighborhood
-    var raw = localStorage.getItem('mbdraft:' + name) || localStorage.getItem('mbhood:' + name);
-    if (!raw) { alert('No saved data found for "' + name + '".'); return; }
-    var d = JSON.parse(raw);
-    E = d.E || { roads:[], lots:[], labels:[] };
-    nid = d.nid || 1;
+  // Try local draft first, then Firebase published
+  var raw = localStorage.getItem('mbdraft:' + name);
+  if (raw) {
+    try {
+      var d = JSON.parse(raw);
+      E = d.E || { roads:[], lots:[], labels:[] };
+      nid = d.nid || 1;
+      draftName = name;
+      document.getElementById('draft-lbl').textContent = name;
+      recenter(); renderAll(); return;
+    } catch(e) {}
+  }
+  // Fall back to Firebase
+  showHint('Loading from server…');
+  DB.getNeighborhood(name).then(function(data) {
+    if (!data) { alert('No saved data found for "' + name + '".'); return; }
+    E = data.E || { roads:[], lots:[], labels:[] };
+    nid = data.nid || 1;
     draftName = name;
     document.getElementById('draft-lbl').textContent = name;
     recenter(); renderAll();
-  } catch(e) { alert('Load failed: ' + e.message); }
+  }).catch(function(e){ alert('Load failed: ' + e.message); });
 }
 
 function resetBoard() {
@@ -284,15 +301,18 @@ function closePub() { document.getElementById('pub-modal').classList.remove('vis
 function confirmPub() {
   var name = document.getElementById('pub-input').value.trim();
   if (!name) { alert('Enter a neighborhood name.'); return; }
-  try {
-    localStorage.setItem('mbhood:' + name, JSON.stringify({ name:name, E:E, publishedAt:new Date().toISOString() }));
-    alert('"' + name + '" published!');
-    closePub();
-    draftName = name; document.getElementById('draft-lbl').textContent = name;
+  showHint('Publishing…');
+  closePub();
+  var mapData = { name:name, E:E, nid:nid, publishedAt:new Date().toISOString() };
+  DB.saveNeighborhood(name, mapData).then(function() {
+    // Also keep local copy for fast draft loading
+    localStorage.setItem('mbdraft:' + name, JSON.stringify({ E:E, nid:nid }));
+    draftName = name;
+    document.getElementById('draft-lbl').textContent = name;
     bgSrc = null; document.getElementById('g-img').innerHTML = '';
     document.getElementById('ic').classList.remove('vis');
-    doSave();
-  } catch(e) { alert('Publish failed: ' + e.message); }
+    showHint('"' + name + '" published to server ✓');
+  }).catch(function(e){ alert('Publish failed: ' + e.message); });
 }
 
 // ===== VIEWPORT =====
@@ -829,19 +849,11 @@ function saveHouses() {
     var lot = E.lots.find(function(l) { return l.id === id; });
     if (lot) lot.house = inp.value.trim();
   });
-  // Save to draft
   doSave();
-  // Also write back to published neighborhood so week.html sees it immediately
+  // Push updated map to Firebase so week.html sees new house numbers
   if (draftName !== 'Unsaved') {
-    try {
-      var pubRaw = localStorage.getItem('mbhood:' + draftName);
-      if (pubRaw) {
-        var pub = JSON.parse(pubRaw);
-        pub.E = pub.E || {};
-        pub.E.lots = E.lots;
-        localStorage.setItem('mbhood:' + draftName, JSON.stringify(pub));
-      }
-    } catch(e) {}
+    var mapData = { name:draftName, E:E, nid:nid, publishedAt:new Date().toISOString() };
+    DB.saveNeighborhood(draftName, mapData).catch(function(){});
   }
   document.getElementById('houses-modal').classList.remove('vis');
   renderAll();

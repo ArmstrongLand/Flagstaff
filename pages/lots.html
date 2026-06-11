@@ -65,31 +65,31 @@ body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
   <div id="lot-list"></div>
 </div>
 
+<script src="db.js"></script>
 <script>
 (function(){
 
-var SOLD_KEY = 'wk_sold';
 var hoods = [];
 var sold = {};
 
-function loadSold(){ try{ var r=localStorage.getItem(SOLD_KEY); sold=r?JSON.parse(r):{}; }catch(e){ sold={}; } }
-function saveSold(){ try{ localStorage.setItem(SOLD_KEY,JSON.stringify(sold)); }catch(e){} }
+function loadSold(cb){
+  DB.getSold().then(function(data){ sold=data||{}; cb(); }).catch(function(){ sold={}; cb(); });
+}
 function isSoldFor(hood,id){ return((sold[hood]||[]).indexOf(id)!==-1); }
 function toggleSoldFor(hood,id){
   var list=sold[hood]||(sold[hood]=[]);
   var idx=list.indexOf(id);
   if(idx===-1) list.push(id); else list.splice(idx,1);
-  sold[hood]=list; saveSold();
+  sold[hood]=list;
+  DB.setSoldForHood(hood,list).catch(function(){});
 }
 
 function loadHoods(){
-  hoods=[];
-  for(var i=0;i<localStorage.length;i++){
-    var k=localStorage.key(i);
-    if(k&&k.startsWith('mbhood:')) hoods.push(k.replace('mbhood:',''));
-  }
-  if(!hoods.length){ renderEmpty(); return; }
-  render();
+  DB.getNeighborhoods().then(function(data){
+    hoods=Object.values(data||{}).map(function(h){return h.name;});
+    if(!hoods.length){ renderEmpty(); return; }
+    render();
+  }).catch(function(){ renderEmpty(); });
 }
 
 function renderEmpty(){
@@ -112,30 +112,30 @@ function render(){
 
   if(!hoods.length){ renderEmpty(); return; }
 
-  var totalSold=0;
+  list.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:12px">Loading…</p>';
 
-  hoods.forEach(function(name){
-    var raw=localStorage.getItem('mbhood:'+name);
-    if(!raw)return;
-    var data; try{ data=JSON.parse(raw); }catch(e){ return; }
-    var lots=(data.E&&data.E.lots)||[];
-    if(!lots.length)return;
-
-    var sorted=sortByLotNum(lots);
-    var soldCount=sorted.filter(function(l){ return isSoldFor(name,l.id); }).length;
-    totalSold+=soldCount;
-
-    // Neighborhood header
-    var hdr=document.createElement('div');
-    hdr.className='section-label';
-    hdr.textContent=name+' · '+lots.length+' lots · '+soldCount+' sold';
-    list.appendChild(hdr);
-
-    // All lots sorted together, sold ones greyed out inline
-    sorted.forEach(function(l){ list.appendChild(makeRow(l,name)); });
+  // Fetch all neighborhood map data from Firebase in parallel
+  Promise.all(hoods.map(function(name){
+    return DB.getNeighborhood(name).then(function(data){ return {name:name, data:data}; }).catch(function(){ return {name:name, data:null}; });
+  })).then(function(results){
+    list.innerHTML = '';
+    var totalSold=0;
+    results.forEach(function(r){
+      var name=r.name, data=r.data;
+      if(!data)return;
+      var lots=(data.E&&data.E.lots)||[];
+      if(!lots.length)return;
+      var sorted=sortByLotNum(lots);
+      var soldCount=sorted.filter(function(l){ return isSoldFor(name,l.id); }).length;
+      totalSold+=soldCount;
+      var hdr=document.createElement('div');
+      hdr.className='section-label';
+      hdr.textContent=name+' · '+lots.length+' lots · '+soldCount+' sold';
+      list.appendChild(hdr);
+      sorted.forEach(function(l){ list.appendChild(makeRow(l,name)); });
+    });
+    document.getElementById('sold-count').textContent=totalSold+' sold';
   });
-
-  document.getElementById('sold-count').textContent=totalSold+' sold';
 }
 
 function makeRow(l, name){
@@ -170,8 +170,7 @@ function makeRow(l, name){
 
 document.getElementById('back-btn').addEventListener('click',function(){ window.location.href='../index.html'; });
 
-loadSold();
-loadHoods();
+loadSold(function(){ loadHoods(); });
 
 })();
 </script>
