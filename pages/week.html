@@ -401,16 +401,9 @@ function renderMap(){
     if(!sold_){
       var hit=mk('path',{d:polyPath(l.pts),fill:'transparent',stroke:'none',cursor:'pointer'},grp);
       (function(lotId,lotLabel){
-        hit.addEventListener('pointerdown',function(e){e.stopPropagation();});
-        hit.addEventListener('pointerup',function(e){
+        hit.addEventListener('click',function(e){
           e.stopPropagation();
-          toggleDone(lotId);
-          var nowDone=isDone(lotId);
-          renderMap(); updateProgress();
-          showToast((nowDone?'✓ Lot '+lotLabel+' done':'Lot '+lotLabel+' unmarked'));
-        });
-        hit.addEventListener('touchend',function(e){
-          e.preventDefault(); e.stopPropagation();
+          if(wasDragging) return;
           toggleDone(lotId);
           var nowDone=isDone(lotId);
           renderMap(); updateProgress();
@@ -503,10 +496,10 @@ SVG.addEventListener('wheel',function(e){
 
 // Touch
 SVG.addEventListener('touchstart',function(e){
-  e.preventDefault(); tMoved=false; wasDragging=false;
+  tMoved=false; wasDragging=false;
   if(e.touches.length===1){ tPanStart={x:e.touches[0].clientX,y:e.touches[0].clientY}; tPanOrig={x:vx,y:vy}; tDist=null; }
   if(e.touches.length===2){ tDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); tPanStart={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2}; tPanOrig={x:vx,y:vy}; }
-},{passive:false});
+},{passive:true});
 SVG.addEventListener('touchmove',function(e){
   e.preventDefault(); tMoved=true; wasDragging=true;
   if(e.touches.length===2&&tDist!=null){
